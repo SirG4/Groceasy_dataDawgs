@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GROCEASY</title>
+    <link rel="stylesheet" href="UIV1.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <header>
+        <h1 class="company-name">GROCEASY</h1>
+        <div class="user-section">
+            <button id="userIcon" class="user-icon">
+                <i class="fas fa-user"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Auth Modal (unchanged) -->
+    <div id="authModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <div class="auth-tabs">
+                <button class="auth-tab active" data-tab="signin">Sign In</button>
+                <button class="auth-tab" data-tab="signup">Sign Up</button>
+            </div>
+            
+            <!-- Sign In Form -->
+            <form id="signinForm" class="auth-form">
+                <input type="text" placeholder="Username" required>
+                <input type="password" placeholder="Password" required>
+                <button type="submit" class="auth-button">Sign In</button>
+            </form>
+
+            <!-- Sign Up Form -->
+            <form id="signupForm" class="auth-form" style="display: none;">
+                <input type="text" placeholder="Username" required>
+                <input type="email" placeholder="Email" required>
+                <input type="number" placeholder="Age" required min="13">
+                <input type="text" placeholder="City" required>
+                <input type="password" placeholder="Password" required>
+                <input type="password" placeholder="Confirm Password" required>
+                <button type="submit" class="auth-button">Sign Up</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Left Panel -->
+        <!-- Left Panel -->
+<div class="left-panel">
+    <div class="search-section">
+        <input type="text" id="searchBar" class="search-bar" placeholder="Search products...">
+        <button class="button" id="searchButton">Search</button>
+    </div>
+
+    <!-- Products Table with Type Indicators -->
+    <div class="products-container">
+        <table class="products-table">
+            <thead>
+                <tr>
+                    <th>Type</th> <!-- New column -->
+                    <th>Product Image</th>
+                    <th>Price</th>
+                    <th>Company</th>
+                    <th>Product Link</th>
+                    <th>Ratings</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="productsTableBody">
+                <!-- Products will be dynamically inserted here -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+        <!-- Right Panel (unchanged except for star ratings) -->
+        <div class="right-panel">
+            <div class="cart-section">
+                <h2 class="cart-title">Cart</h2>
+                <div id="cartTotal" class="cart-total">Total: ₹0</div>
+                <button id="buyAllBtn" class="buy-all-btn" style="display: none;">Buy All Items</button>
+                <div class="cart-items" id="cartItems">
+                    <!-- Cart items will be added here -->
+                </div>
+            </div>
+            <div class="Recommendation-section" style="display: none;">
+                <h2 class="Recommendation-title">Recommended For You</h2>
+                <div class="products-list" id="recommendedItems">
+                    <!-- Recommended items will be added here -->
+                </div>
+                <button id="refreshRecommendation" class="refresh-btn">
+                    <i class="fas fa-sync-alt"></i> Refresh Recommendation
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const searchBar = document.getElementById('searchBar');
+        const searchButton = document.getElementById('searchButton');
+        const productsTableBody = document.getElementById('productsTableBody');
+        const cartItems = document.getElementById('cartItems');
+        const cartTotal = document.getElementById('cartTotal');
+        
+        // State
+        let cartProducts = [];
+        let activeUser = null;
+    
+        // Auth Modal Elements
+        const modal = document.getElementById('authModal');
+        const userIcon = document.getElementById('userIcon');
+        const closeBtn = document.getElementsByClassName('close')[0];
+        const authTabs = document.querySelectorAll('.auth-tab');
+        const authForms = document.querySelectorAll('.auth-form');
+    
+        // --- Auth Functions ---
+        function updateUserDisplay() {
+            const userSection = document.querySelector('.user-section');
+            if (activeUser) {
+                userSection.innerHTML = `
+                    <span class="active-user">Hello, ${activeUser}</span>
+                    <button id="logoutBtn" class="logout-btn">Logout</button>
+                `;
+                document.getElementById('logoutBtn').onclick = logout;
+            } else {
+                userSection.innerHTML = `
+                    <button id="userIcon" class="user-icon">
+                        <i class="fas fa-user"></i>
+                    </button>
+                `;
+                document.getElementById('userIcon').onclick = () => modal.style.display = "block";
+            }
+        }
+    
+        function logout() {
+            activeUser = null;
+            updateUserDisplay();
+            cartProducts = [];
+            updateCartDisplay();
+            document.querySelector('.Recommendation-section').style.display = 'none';
+        }
+    
+        // Modal Controls
+        userIcon.onclick = () => modal.style.display = "block";
+        closeBtn.onclick = () => modal.style.display = "none";
+        window.onclick = (event) => {
+            if (event.target === modal) modal.style.display = "none";
+        };
+    
+        // Auth Tabs
+        authTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                authTabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                authForms.forEach(form => form.style.display = 'none');
+                document.getElementById(`${tab.dataset.tab}Form`).style.display = 'flex';
+            });
+        });
+    
+        // Sign In Form
+        document.getElementById('signinForm').onsubmit = async function(e) {
+            e.preventDefault();
+            const formData = {
+                userid: this.querySelector('input[placeholder="Username"]').value,
+                password: this.querySelector('input[placeholder="Password"]').value
+            };
+    
+            try {
+                const response = await fetch('http://localhost:5000/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(formData)
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    activeUser = formData.userid;
+                    updateUserDisplay();
+                    modal.style.display = "none";
+                    await fetchRecommendation();
+                } else {
+                    alert('Invalid credentials');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Login failed');
+            }
+        };
+    
+        // Sign Up Form
+        document.getElementById('signupForm').onsubmit = async function(e) {
+            e.preventDefault();
+            const formData = {
+                userid: this.querySelector('input[placeholder="Username"]').value,
+                password: this.querySelector('input[placeholder="Password"]').value,
+                age: this.querySelector('input[placeholder="Age"]').value,
+                location: this.querySelector('input[placeholder="City"]').value
+            };
+    
+            try {
+                const response = await fetch('http://localhost:5000/register', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(formData)
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    activeUser = formData.userid;
+                    updateUserDisplay();
+                    modal.style.display = "none";
+                    await fetchRecommendation();
+                } else {
+                    alert(data.message || 'Registration failed');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Registration failed');
+            }
+        };
+    
+        // --- Cart Functions ---
+        function updateCartTotal() {
+            const total = cartProducts.reduce((sum, item) => sum + parseFloat(item.price), 0);
+            cartTotal.textContent = `Total: ₹${total.toFixed(2)}`;
+        }
+    
+        function removeFromCart(index) {
+            cartProducts.splice(index, 1);
+            updateCartDisplay();
+        }
+    
+        function addToCart(product) {
+            cartProducts.push(product);
+            updateCartDisplay();
+        }
+    
+        function updateCartDisplay() {
+            const buyAllBtn = document.getElementById('buyAllBtn');
+            buyAllBtn.style.display = (cartProducts.length > 0 && activeUser) ? 'block' : 'none';
+            
+            cartItems.innerHTML = cartProducts.map((item, index) => `
+                <div class="cart-item">
+                    <div class="cart-item-image">
+                        <img src="${item.image}" 
+                             alt="${item.name}"
+                             onerror="this.src='placeholder.png'"
+                             loading="lazy">
+                    </div>
+                    <div class="cart-item-details">
+                        <h4>${item.name}</h4>
+                        <p>₹${item.price}</p>
+                        <p>${item.source}</p>
+                        <button onclick="removeFromCart(${index})" class="remove-btn">Remove</button>
+                    </div>
+                </div>
+            `).join('');
+            updateCartTotal();
+        }
+    
+        // --- Product Table Functions ---
+        function createProductRow(product, type) {
+            return `
+                <tr>
+                    <td>
+                        <span class="product-type ${type === 'popular' ? 'popular-badge' : 'cheap-badge'}">
+                            ${type === 'popular' ? 'Popular' : 'Cheapest'}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="product-image">
+                            <img src="${product.image}" 
+                                 alt="${product.name}"
+                                 onerror="this.src='placeholder.png'"
+                                 loading="lazy">
+                        </div>
+                    </td>
+                    <td>₹${product.price}</td>
+                    <td>${product.source}</td>
+                    <td><a href="${product.link}" target="_blank" class="view-link">View Product</a></td>
+                    <td>
+                        <div class="star-rating">
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                        </div>
+                    </td>
+                    <td>
+                        <button class="add-to-cart-btn" onclick='addToCart(${JSON.stringify(product)})'>
+                            Add to Cart
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }
+    
+        async function searchProducts() {
+            const searchTerm = searchBar.value;
+            if (!searchTerm) return;
+    
+            try {
+                const response = await fetch('http://localhost:5000/search', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ search_term: searchTerm })
+                });
+                const data = await response.json();
+                
+                const popular = data.popular.map(p => createProductRow(p, 'popular'));
+                const cheapest = data.cheapest.map(p => createProductRow(p, 'cheap'));
+                productsTableBody.innerHTML = [...popular, ...cheapest].join('');
+    
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+    
+        // --- Recommendation ---
+        async function fetchRecommendation() {
+            if (!activeUser) return;
+            
+            try {
+                const recommendSection = document.querySelector('.Recommendation-section');
+                recommendSection.style.display = 'block';
+                document.getElementById('recommendedItems').innerHTML = '<div class="loading">Loading Recommendation...</div>';
+                
+                const response = await fetch('http://localhost:5000/Recommendation', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ userid: activeUser })
+                });
+                const data = await response.json();
+                
+                if (data.success && data.Recommendation?.length > 0) {
+                    document.getElementById('recommendedItems').innerHTML = 
+                        data.Recommendation.map(product => `
+                            <div class="product-item">
+                                <div class="product-image">
+                                    <img src="${product.image}" 
+                                         alt="${product.name}"
+                                         onerror="this.src='placeholder.png'"
+                                         loading="lazy">
+                                </div>
+                                <div class="product-info">
+                                    <div class="product-details">
+                                        <h3 class="product-name">${product.name}</h3>
+                                        <p class="product-price">₹${product.price}</p>
+                                        <p class="product-source">${product.source}</p>
+                                        <div class="star-rating">
+                                            <i class="fas fa-star"></i>
+                                            <i class="fas fa-star"></i>
+                                            <i class="fas fa-star"></i>
+                                            <i class="fas fa-star"></i>
+                                            <i class="fas fa-star"></i>
+                                        </div>
+                                        <a href="${product.link}" target="_blank" class="view-link">View Product</a>
+                                    </div>
+                                    <button class="add-to-cart-btn" onclick='addToCart(${JSON.stringify(product)})'>
+                                        Add to Cart
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('');
+                } else {
+                    document.getElementById('recommendedItems').innerHTML = '<div class="no-results">No Recommendation available</div>';
+                }
+            } catch (error) {
+                console.error('Error fetching Recommendation:', error);
+                document.getElementById('recommendedItems').innerHTML = '<div class="error">Failed to load Recommendation</div>';
+            }
+        }
+    
+        // --- Purchase Handling ---
+        async function buyAllItems() {
+            if (!activeUser || cartProducts.length === 0) return;
+            
+            try {
+                const purchaseHistory = cartProducts.map(item => item.name).join(':');
+                const response = await fetch('http://localhost:5000/end_session', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ userid: activeUser, cart_items: purchaseHistory })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    cartProducts = [];
+                    updateCartDisplay();
+                    alert('Purchase successful! Thank you for shopping.');
+                    await fetchRecommendation();
+                } else {
+                    alert('Purchase failed. Please try again.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Purchase failed. Please try again.');
+            }
+        }
+    
+        // --- Event Listeners ---
+        searchButton.addEventListener('click', searchProducts);
+        searchBar.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') searchProducts();
+        });
+        document.getElementById('buyAllBtn').addEventListener('click', buyAllItems);
+        document.getElementById('refreshRecommendation').addEventListener('click', async function() {
+            this.classList.add('loading');
+            this.disabled = true;
+            await fetchRecommendation();
+            this.classList.remove('loading');
+            this.disabled = false;
+        });
+    </script>
+</body>
+</html>
